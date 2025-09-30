@@ -3,6 +3,14 @@ name = "fencecat"
 version = "0.1.1"
 edition = "2024"
 description = "Walkdir cat with markdown fenced code output"
+keywords = ["markdown", "code-fence", "cli", "clipboard", "filesystem"]
+categories = [
+    "command-line-utilities",
+    "filesystem",
+    "development-tools",
+    "text-processing",
+    "value-formatting",
+]
 authors = ["Cody Wyatt Neiman (xangelix) <neiman@cody.to>"]
 license = "MIT"
 documentation = "https://docs.rs/fencecat"
