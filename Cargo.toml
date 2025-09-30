@@ -1,6 +1,6 @@
 [package]
 name = "fencecat"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Walkdir cat with markdown fenced code output"
 authors = ["Cody Wyatt Neiman (xangelix) <neiman@cody.to>"]
