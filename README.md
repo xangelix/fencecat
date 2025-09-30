@@ -1,4 +1,4 @@
-# fencecat 🐈
+# fencecat ⚖️🐈
 
 Recursively emit Markdown code fences labeled with relative file paths.  
 Perfect for sharing source trees in LLM chats, issues, blog posts, or code reviews.
