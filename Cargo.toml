@@ -1,0 +1,14 @@
+[package]
+name = "fencecat"
+version = "0.1.0"
+edition = "2024"
+description = "Walkdir cat with markdown fenced code output"
+license = "MIT"
+documentation = "https://docs.rs/fencecat"
+repository = "https://github.com/xangelix/fencecat"
+
+[dependencies]
+arboard = { version = "3.6.1", features = ["wayland-data-control"] }
+clap = { version = "4.5.48", features = ["derive"] }
+ignore = "0.4.23"
+which = "8.0.0"
