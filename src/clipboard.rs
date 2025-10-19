@@ -40,7 +40,9 @@ pub fn copy_to_clipboard_multi(text: &str) -> Result<(), String> {
     }
     #[cfg(target_os = "windows")]
     {
-        // Try PowerShell's clip
+        if cmd_exists("clip.exe") {
+            return clip_exe(text).map_err(|e| e.to_string());
+        }
         if cmd_exists("powershell") {
             return powershell_clip(text).map_err(|e| e.to_string());
         }
@@ -136,6 +138,12 @@ fn verify_xsel_non_empty() -> bool {
 #[cfg(target_os = "macos")]
 fn pbcopy(text: &str) -> io::Result<()> {
     run_with_stdin("pbcopy", &[], text.as_bytes())
+}
+
+#[cfg(target_os = "windows")]
+fn clip_exe(text: &str) -> io::Result<()> {
+    // clip.exe reads stdin and sets CF_UNICODETEXT
+    run_with_stdin("clip.exe", &[], text.as_bytes())
 }
 
 // Windows
