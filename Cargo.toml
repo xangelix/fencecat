@@ -18,6 +18,6 @@ repository = "https://github.com/xangelix/fencecat"
 
 [dependencies]
 arboard = { version = "3.6.1", features = ["wayland-data-control"] }
-clap = { version = "4.5.48", features = ["derive"] }
-ignore = "0.4.23"
+clap = { version = "4.5.49", features = ["derive"] }
+ignore = "0.4.24"
 which = "8.0.0"
