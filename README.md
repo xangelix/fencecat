@@ -18,7 +18,7 @@ Perfect for sharing source trees in LLM chats, issues, blog posts, or code revie
 
 ```bash
 cargo install --locked fencecat
-````
+```
 
 The resulting binary will be in `~/.cargo/bin/fencecat`.
 
