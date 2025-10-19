@@ -52,6 +52,9 @@ fencecat [OPTIONS] [DIR]
 * `-V`, `--version`
   Show version.
 
+* `--no-ignore`
+  Include hidden and gitignored files (disables ignore rules).
+
 ### Examples
 
 Emit all files under `src/`:
