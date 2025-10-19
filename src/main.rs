@@ -38,6 +38,25 @@ struct Cli {
         value_delimiter = ','
     )]
     ext: Option<Vec<String>>,
+
+    /// Include hidden and gitignored files (disable ignore rules)
+    #[arg(short = 'H', long = "no-ignore")]
+    no_ignore: bool,
+}
+
+impl Cli {
+    pub fn build_walkdir(&self) -> WalkBuilder {
+        let mut wb = WalkBuilder::new(&self.dir);
+        if self.no_ignore {
+            wb.hidden(false)
+                .ignore(false)
+                .git_ignore(false)
+                .git_global(false)
+                .git_exclude(false)
+                .parents(false);
+        }
+        wb
+    }
 }
 
 /// Heuristic: consider a file "binary" if the first few KB contain a NUL byte.
@@ -81,7 +100,7 @@ fn main() {
             .collect()
     });
 
-    let walker = WalkBuilder::new(&cli.dir).build();
+    let walker = cli.build_walkdir().build();
     let mut files: Vec<FileInfo> = Vec::new();
 
     for dent in walker {
