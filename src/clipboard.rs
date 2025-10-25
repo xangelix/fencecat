@@ -40,11 +40,11 @@ pub fn copy_to_clipboard_multi(text: &str) -> Result<(), String> {
     }
     #[cfg(target_os = "windows")]
     {
-        if cmd_exists("clip.exe") {
-            return clip_exe(text).map_err(|e| e.to_string());
-        }
         if cmd_exists("powershell") {
             return powershell_clip(text).map_err(|e| e.to_string());
+        }
+        if cmd_exists("clip.exe") {
+            return clip_exe(text).map_err(|e| e.to_string());
         }
     }
 
