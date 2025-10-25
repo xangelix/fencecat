@@ -2,13 +2,14 @@ use std::{
     cmp::Reverse,
     collections::HashSet,
     fs::{self, File},
-    io::{self, Read},
+    io::{self, Read as _},
     path::{Path, PathBuf},
 };
 
 use clap::{ArgAction, Parser};
 use ignore::WalkBuilder;
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Parser, Debug)]
 #[command(
     name = "fencecat",
@@ -17,8 +18,8 @@ use ignore::WalkBuilder;
 Useful for sharing source trees in LLM chats or other issue trackers."
 )]
 struct Cli {
-    /// Root directory to scan
-    #[arg(value_name = "DIR", default_value = ".")]
+    /// Root directory to scan OR a single file to emit
+    #[arg(value_name = "PATH", default_value = ".")]
     dir: PathBuf,
 
     /// Copy the full output to the clipboard
@@ -42,6 +43,10 @@ struct Cli {
     /// Include hidden and gitignored files (disable ignore rules)
     #[arg(short = 'H', long = "no-ignore")]
     no_ignore: bool,
+
+    /// Prepend a plain file listing (like `dir`) before the fences (no timestamps/metadata)
+    #[arg(short = 'D', long = "dir-list", action = ArgAction::SetTrue)]
+    dir_list: bool,
 }
 
 impl Cli {
@@ -60,7 +65,6 @@ impl Cli {
 }
 
 /// Heuristic: consider a file "binary" if the first few KB contain a NUL byte.
-/// (Fast and good enough for source trees.)
 fn is_binary(path: &Path) -> io::Result<bool> {
     let mut f = File::open(path)?;
     let mut buf = [0u8; 8192];
@@ -85,21 +89,60 @@ struct FileInfo {
     size: u64,
 }
 
-fn main() {
-    let cli = Cli::parse();
-
-    if !cli.dir.is_dir() {
-        eprintln!("Not a directory: {}", cli.dir.display());
-        std::process::exit(1);
-    }
-
-    let ext_filter: Option<HashSet<String>> = cli.ext.as_ref().map(|v| {
+fn build_ext_filter(cli: &Cli) -> Option<HashSet<String>> {
+    cli.ext.as_ref().map(|v| {
         v.iter()
             .map(|s| s.trim().trim_start_matches('.').to_ascii_lowercase())
             .filter(|s| !s.is_empty())
             .collect()
-    });
+    })
+}
 
+fn make_fileinfo_if_included(
+    path: &Path,
+    root_for_rel: &Path,
+    ext_filter: Option<&HashSet<String>>,
+) -> Option<FileInfo> {
+    if let Some(filter) = ext_filter {
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_ascii_lowercase);
+        if !ext.is_some_and(|e| filter.contains(&e)) {
+            return None;
+        }
+    }
+
+    let md = match path.metadata() {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("skip {}: metadata error: {e}", path.display());
+            return None;
+        }
+    };
+    if md.len() == 0 {
+        return None;
+    }
+
+    match is_binary(path) {
+        Ok(true) => return None,
+        Ok(false) => {}
+        Err(e) => {
+            eprintln!("skip {}: read error: {e}", path.display());
+            return None;
+        }
+    }
+
+    let rel = fencecat::rel_string(root_for_rel, path);
+
+    Some(FileInfo {
+        path: path.to_path_buf(),
+        rel,
+        size: md.len(),
+    })
+}
+
+fn collect_from_dir(cli: &Cli, ext_filter: Option<&HashSet<String>>) -> Vec<FileInfo> {
     let walker = cli.build_walkdir().build();
     let mut files: Vec<FileInfo> = Vec::new();
 
@@ -112,45 +155,10 @@ fn main() {
             }
         };
         if entry.file_type().is_some_and(|ft| ft.is_file()) {
-            let path = entry.path().to_path_buf();
-
-            if let Some(filter) = &ext_filter {
-                let ext = path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(str::to_ascii_lowercase);
-                if !ext.is_some_and(|e| filter.contains(&e)) {
-                    continue;
-                }
+            let path = entry.path();
+            if let Some(info) = make_fileinfo_if_included(path, &cli.dir, ext_filter) {
+                files.push(info);
             }
-
-            let md = match entry.metadata() {
-                Ok(m) => m,
-                Err(e) => {
-                    eprintln!("skip {}: metadata error: {e}", path.display());
-                    continue;
-                }
-            };
-            if md.len() == 0 {
-                continue;
-            }
-
-            match is_binary(&path) {
-                Ok(true) => continue,
-                Ok(false) => {}
-                Err(e) => {
-                    eprintln!("skip {}: read error: {e}", path.display());
-                    continue;
-                }
-            }
-
-            let rel = fencecat::rel_string(&cli.dir, &path);
-
-            files.push(FileInfo {
-                path,
-                rel,
-                size: md.len(),
-            });
         }
     }
 
@@ -159,9 +167,58 @@ fn main() {
     } else {
         files.sort_by(|a, b| a.rel.cmp(&b.rel));
     }
+    files
+}
+
+fn collect_from_single(cli: &Cli, ext_filter: Option<&HashSet<String>>) -> Vec<FileInfo> {
+    let path = &cli.dir;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    make_fileinfo_if_included(path, parent, ext_filter)
+        .into_iter()
+        .collect()
+}
+
+fn collect_any(cli: &Cli) -> Vec<FileInfo> {
+    let ext_filter = build_ext_filter(cli);
+
+    if !cli.dir.exists() {
+        eprintln!("No such file or directory: {}", cli.dir.display());
+        std::process::exit(1);
+    }
+
+    if cli.dir.is_file() {
+        collect_from_single(cli, ext_filter.as_ref())
+    } else if cli.dir.is_dir() {
+        collect_from_dir(cli, ext_filter.as_ref())
+    } else {
+        eprintln!("Not a regular file or directory: {}", cli.dir.display());
+        std::process::exit(1);
+    }
+}
+
+fn emit_dir_listing(files: &[FileInfo]) -> String {
+    let mut s = String::new();
+    s.push_str("```\n");
+    for f in files {
+        s.push_str(&f.rel);
+        s.push('\n');
+    }
+    s.push_str("```\n\n");
+    s
+}
+
+fn main() {
+    let cli = Cli::parse();
+
+    let files = collect_any(&cli);
 
     let mut out = String::new();
-    for f in files {
+
+    if cli.dir_list {
+        out.push_str(&emit_dir_listing(&files));
+    }
+
+    for f in &files {
         let bytes = match fs::read(&f.path) {
             Ok(b) => b,
             Err(e) => {
@@ -186,7 +243,6 @@ fn main() {
         out.push_str("\n\n");
     }
 
-    // Print to stdout
     print!("{out}");
 
     if cli.copy {
