@@ -163,7 +163,11 @@ fn collect_from_dir(cli: &Cli, ext_filter: Option<&HashSet<String>>) -> Vec<File
     }
 
     if cli.biggest_first {
-        files.sort_by_key(|f| Reverse(f.size));
+        files.sort_by(|a, b| {
+            Reverse(a.size)
+                .cmp(&Reverse(b.size))
+                .then_with(|| a.rel.cmp(&b.rel))
+        });
     } else {
         files.sort_by(|a, b| a.rel.cmp(&b.rel));
     }
