@@ -40,6 +40,11 @@ struct Cli {
     )]
     ext: Option<Vec<String>>,
 
+    /// Exclude files whose extension matches any of the given ones (comma-separated).
+    /// These bans happen after whitelists.
+    #[arg(long = "not-ext", value_name = "EXT[,EXT...]", value_delimiter = ',')]
+    not_ext: Option<Vec<String>>,
+
     /// Include hidden and gitignored files (disable ignore rules)
     #[arg(short = 'H', long = "no-ignore")]
     no_ignore: bool,
@@ -89,26 +94,43 @@ struct FileInfo {
     size: u64,
 }
 
-fn build_ext_filter(cli: &Cli) -> Option<HashSet<String>> {
-    cli.ext.as_ref().map(|v| {
-        v.iter()
-            .map(|s| s.trim().trim_start_matches('.').to_ascii_lowercase())
-            .filter(|s| !s.is_empty())
-            .collect()
-    })
+/// Helper to normalize extension lists (strip dots, lowercase)
+fn normalize_ext_list(list: &[String]) -> HashSet<String> {
+    list.iter()
+        .map(|s| s.trim().trim_start_matches('.').to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+fn build_ext_filters(cli: &Cli) -> (Option<HashSet<String>>, Option<HashSet<String>>) {
+    let allow = cli.ext.as_ref().map(|v| normalize_ext_list(v));
+    let deny = cli.not_ext.as_ref().map(|v| normalize_ext_list(v));
+    (allow, deny)
 }
 
 fn make_fileinfo_if_included(
     path: &Path,
     root_for_rel: &Path,
-    ext_filter: Option<&HashSet<String>>,
+    ext_allow: Option<&HashSet<String>>,
+    ext_deny: Option<&HashSet<String>>,
 ) -> Option<FileInfo> {
-    if let Some(filter) = ext_filter {
+    // 1. Check Extensions
+    if ext_allow.is_some() || ext_deny.is_some() {
         let ext = path
             .extension()
             .and_then(|e| e.to_str())
             .map(str::to_ascii_lowercase);
-        if !ext.is_some_and(|e| filter.contains(&e)) {
+
+        // If whitelist exists, file must match it
+        if let Some(allow) = ext_allow
+            && !ext.as_ref().is_some_and(|e| allow.contains(e))
+        {
+            return None;
+        }
+        // If blacklist exists, file must NOT match it
+        if let Some(deny) = ext_deny
+            && ext.as_ref().is_some_and(|e| deny.contains(e))
+        {
             return None;
         }
     }
@@ -142,7 +164,11 @@ fn make_fileinfo_if_included(
     })
 }
 
-fn collect_from_dir(cli: &Cli, ext_filter: Option<&HashSet<String>>) -> Vec<FileInfo> {
+fn collect_from_dir(
+    cli: &Cli,
+    ext_allow: Option<&HashSet<String>>,
+    ext_deny: Option<&HashSet<String>>,
+) -> Vec<FileInfo> {
     let walker = cli.build_walkdir().build();
     let mut files: Vec<FileInfo> = Vec::new();
 
@@ -156,7 +182,7 @@ fn collect_from_dir(cli: &Cli, ext_filter: Option<&HashSet<String>>) -> Vec<File
         };
         if entry.file_type().is_some_and(|ft| ft.is_file()) {
             let path = entry.path();
-            if let Some(info) = make_fileinfo_if_included(path, &cli.dir, ext_filter) {
+            if let Some(info) = make_fileinfo_if_included(path, &cli.dir, ext_allow, ext_deny) {
                 files.push(info);
             }
         }
@@ -174,16 +200,20 @@ fn collect_from_dir(cli: &Cli, ext_filter: Option<&HashSet<String>>) -> Vec<File
     files
 }
 
-fn collect_from_single(cli: &Cli, ext_filter: Option<&HashSet<String>>) -> Vec<FileInfo> {
+fn collect_from_single(
+    cli: &Cli,
+    ext_allow: Option<&HashSet<String>>,
+    ext_deny: Option<&HashSet<String>>,
+) -> Vec<FileInfo> {
     let path = &cli.dir;
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    make_fileinfo_if_included(path, parent, ext_filter)
+    make_fileinfo_if_included(path, parent, ext_allow, ext_deny)
         .into_iter()
         .collect()
 }
 
 fn collect_any(cli: &Cli) -> Vec<FileInfo> {
-    let ext_filter = build_ext_filter(cli);
+    let (ext_allow, ext_deny) = build_ext_filters(cli);
 
     if !cli.dir.exists() {
         eprintln!("No such file or directory: {}", cli.dir.display());
@@ -191,9 +221,9 @@ fn collect_any(cli: &Cli) -> Vec<FileInfo> {
     }
 
     if cli.dir.is_file() {
-        collect_from_single(cli, ext_filter.as_ref())
+        collect_from_single(cli, ext_allow.as_ref(), ext_deny.as_ref())
     } else if cli.dir.is_dir() {
-        collect_from_dir(cli, ext_filter.as_ref())
+        collect_from_dir(cli, ext_allow.as_ref(), ext_deny.as_ref())
     } else {
         eprintln!("Not a regular file or directory: {}", cli.dir.display());
         std::process::exit(1);
