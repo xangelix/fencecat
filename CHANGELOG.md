@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.1
+
+- **Release:** v0.2.1
+- **Features (bin):** add `regex` and `not-regex` for regex whitelist and blacklist
+- **Features (bin):** add extension blacklist/bans
+- **Chore (deps)** Bump all dependencies
+
 ## v0.2.0
 
 List-dir "table of contents" cli option, deterministic output, and better Windows clipboard fallback prioritization.

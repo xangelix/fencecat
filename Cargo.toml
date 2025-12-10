@@ -1,6 +1,6 @@
 [package]
 name = "fencecat"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "Walkdir cat with markdown fenced code output"
 keywords = ["markdown", "code-fence", "cli", "clipboard", "filesystem"]
@@ -20,5 +20,8 @@ repository = "https://github.com/xangelix/fencecat"
 arboard = { version = "3.6.1", features = ["wayland-data-control"] }
 clap = { version = "4.5.53", features = ["derive"] }
 ignore = "0.4.25"
-regex = { version = "1.12.2", default-features = false, features = ["std", "perf"] }
+regex = { version = "1.12.2", default-features = false, features = [
+    "std",
+    "perf",
+] }
 which = "8.0.0"
