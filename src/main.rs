@@ -8,6 +8,7 @@ use std::{
 
 use clap::{ArgAction, Parser};
 use ignore::WalkBuilder;
+use regex::RegexSet;
 
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Parser, Debug)]
@@ -44,6 +45,16 @@ struct Cli {
     /// These bans happen after whitelists.
     #[arg(long = "not-ext", value_name = "EXT[,EXT...]", value_delimiter = ',')]
     not_ext: Option<Vec<String>>,
+
+    /// Only include paths matching these regexes (relative to CWD).
+    /// Can be specified multiple times.
+    #[arg(short, long = "regex", action = ArgAction::Append)]
+    regex: Option<Vec<String>>,
+
+    /// Exclude paths matching these regexes (relative to CWD).
+    /// Can be specified multiple times.
+    #[arg(long = "not-regex", action = ArgAction::Append)]
+    not_regex: Option<Vec<String>>,
 
     /// Include hidden and gitignored files (disable ignore rules)
     #[arg(short = 'H', long = "no-ignore")]
@@ -108,11 +119,25 @@ fn build_ext_filters(cli: &Cli) -> (Option<HashSet<String>>, Option<HashSet<Stri
     (allow, deny)
 }
 
+fn compile_regex_sets(cli: &Cli) -> (Option<RegexSet>, Option<RegexSet>) {
+    let allow = cli
+        .regex
+        .as_ref()
+        .map(|v| RegexSet::new(v).expect("Invalid regex in --regex"));
+    let deny = cli
+        .not_regex
+        .as_ref()
+        .map(|v| RegexSet::new(v).expect("Invalid regex in --not-regex"));
+    (allow, deny)
+}
+
 fn make_fileinfo_if_included(
     path: &Path,
     root_for_rel: &Path,
     ext_allow: Option<&HashSet<String>>,
     ext_deny: Option<&HashSet<String>>,
+    re_allow: Option<&RegexSet>,
+    re_deny: Option<&RegexSet>,
 ) -> Option<FileInfo> {
     // 1. Check Extensions
     if ext_allow.is_some() || ext_deny.is_some() {
@@ -130,6 +155,25 @@ fn make_fileinfo_if_included(
         // If blacklist exists, file must NOT match it
         if let Some(deny) = ext_deny
             && ext.as_ref().is_some_and(|e| deny.contains(e))
+        {
+            return None;
+        }
+    }
+
+    // 2. Check Regex (against path relative to CWD)
+    if re_allow.is_some() || re_deny.is_some() {
+        // Calculate path relative to CWD (".").
+        // If we are in `src/`, and path is `src/main.rs`, this returns `main.rs`.
+        // If we are in `.`, and path is `src/main.rs`, this returns `src/main.rs`.
+        let cwd_rel = fencecat::rel_string(Path::new("."), path);
+
+        if let Some(allow) = re_allow
+            && !allow.is_match(&cwd_rel)
+        {
+            return None;
+        }
+        if let Some(deny) = re_deny
+            && deny.is_match(&cwd_rel)
         {
             return None;
         }
@@ -168,6 +212,8 @@ fn collect_from_dir(
     cli: &Cli,
     ext_allow: Option<&HashSet<String>>,
     ext_deny: Option<&HashSet<String>>,
+    re_allow: Option<&RegexSet>,
+    re_deny: Option<&RegexSet>,
 ) -> Vec<FileInfo> {
     let walker = cli.build_walkdir().build();
     let mut files: Vec<FileInfo> = Vec::new();
@@ -182,7 +228,9 @@ fn collect_from_dir(
         };
         if entry.file_type().is_some_and(|ft| ft.is_file()) {
             let path = entry.path();
-            if let Some(info) = make_fileinfo_if_included(path, &cli.dir, ext_allow, ext_deny) {
+            if let Some(info) =
+                make_fileinfo_if_included(path, &cli.dir, ext_allow, ext_deny, re_allow, re_deny)
+            {
                 files.push(info);
             }
         }
@@ -204,16 +252,19 @@ fn collect_from_single(
     cli: &Cli,
     ext_allow: Option<&HashSet<String>>,
     ext_deny: Option<&HashSet<String>>,
+    re_allow: Option<&RegexSet>,
+    re_deny: Option<&RegexSet>,
 ) -> Vec<FileInfo> {
     let path = &cli.dir;
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    make_fileinfo_if_included(path, parent, ext_allow, ext_deny)
+    make_fileinfo_if_included(path, parent, ext_allow, ext_deny, re_allow, re_deny)
         .into_iter()
         .collect()
 }
 
 fn collect_any(cli: &Cli) -> Vec<FileInfo> {
     let (ext_allow, ext_deny) = build_ext_filters(cli);
+    let (re_allow, re_deny) = compile_regex_sets(cli);
 
     if !cli.dir.exists() {
         eprintln!("No such file or directory: {}", cli.dir.display());
@@ -221,9 +272,21 @@ fn collect_any(cli: &Cli) -> Vec<FileInfo> {
     }
 
     if cli.dir.is_file() {
-        collect_from_single(cli, ext_allow.as_ref(), ext_deny.as_ref())
+        collect_from_single(
+            cli,
+            ext_allow.as_ref(),
+            ext_deny.as_ref(),
+            re_allow.as_ref(),
+            re_deny.as_ref(),
+        )
     } else if cli.dir.is_dir() {
-        collect_from_dir(cli, ext_allow.as_ref(), ext_deny.as_ref())
+        collect_from_dir(
+            cli,
+            ext_allow.as_ref(),
+            ext_deny.as_ref(),
+            re_allow.as_ref(),
+            re_deny.as_ref(),
+        )
     } else {
         eprintln!("Not a regular file or directory: {}", cli.dir.display());
         std::process::exit(1);
