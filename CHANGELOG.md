@@ -1,11 +1,16 @@
 # Changelog
 
+## v0.2.2
+
+- **Release:** v0.2.2
+- **Chore (docs):** Update README with new cli args
+
 ## v0.2.1
 
 - **Release:** v0.2.1
 - **Features (bin):** add `regex` and `not-regex` for regex whitelist and blacklist
 - **Features (bin):** add extension blacklist/bans
-- **Chore (deps)** Bump all dependencies
+- **Chore (deps):** Bump all dependencies
 
 ## v0.2.0
 
