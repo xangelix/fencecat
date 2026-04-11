@@ -34,46 +34,46 @@ fencecat [OPTIONS] [DIR]
 
 ### Options
 
-  * `-c`, `--copy`
-    Copy the full output to the clipboard.
-    On Wayland/X11 this uses external tools (`wl-copy`, `xclip`, or `xsel`) if available.
+- `-c`, `--copy`
+  Copy the full output to the clipboard.
+  On Wayland/X11 this uses external tools (`wl-copy`, `xclip`, or `xsel`) if available.
 
-  * `-B`, `--biggest-first`
-    Order files by size, largest first.
+- `-B`, `--biggest-first`
+  Order files by size, largest first.
 
-  * `--ext EXT[,EXT...]`
-    Only include files with the given extensions.
-    Examples:
+- `--ext EXT[,EXT...]`
+  Only include files with the given extensions.
+  Examples:
 
-    ```bash
-    fencecat . --ext rs,ts,py
-    fencecat src --ext .md,.toml
-    ```
+  ```bash
+  fencecat . --ext rs,ts,py
+  fencecat src --ext .md,.toml
+  ```
 
-  * `--not-ext EXT[,EXT...]`
-    Exclude files with the given extensions. This takes precedence over inclusions.
-    Example:
+- `--not-ext EXT[,EXT...]`
+  Exclude files with the given extensions. This takes precedence over inclusions.
+  Example:
 
-    ```bash
-    fencecat . --not-ext lock,txt
-    ```
+  ```bash
+  fencecat . --not-ext lock,txt
+  ```
 
-  * `--regex PATTERN`
-    Only include paths that match the given Regex pattern (relative to the current working directory).
-    Can be specified multiple times to add multiple patterns.
+- `--regex PATTERN`
+  Only include paths that match the given Regex pattern (relative to the current working directory).
+  Can be specified multiple times to add multiple patterns.
 
-  * `--not-regex PATTERN`
-    Exclude paths that match the given Regex pattern.
-    Can be specified multiple times.
+- `--not-regex PATTERN`
+  Exclude paths that match the given Regex pattern.
+  Can be specified multiple times.
 
-  * `-h`, `--help`
-    Show help information.
+- `-h`, `--help`
+  Show help information.
 
-  * `-V`, `--version`
-    Show version.
+- `-V`, `--version`
+  Show version.
 
-  * `--no-ignore`
-    Include hidden and gitignored files (disables ignore rules).
+- `--no-ignore`
+  Include hidden and gitignored files (disables ignore rules).
 
 ### Examples
 
@@ -123,9 +123,9 @@ fencecat . -B
 
 On Linux/Wayland:
 
-  * Install [`wl-clipboard`](https://github.com/bugaevc/wl-clipboard) for `wl-copy` / `wl-paste`.
-  * If unavailable, `xclip` or `xsel` under XWayland are used.
-  * macOS uses `pbcopy`; Windows uses PowerShell’s `Set-Clipboard`.
+- Install [`wl-clipboard`](https://github.com/bugaevc/wl-clipboard) for `wl-copy` / `wl-paste`.
+- If unavailable, `xclip` or `xsel` under XWayland are used.
+- macOS uses `pbcopy`; Windows uses PowerShell’s `Set-Clipboard`.
 
 If the clipboard still seems empty, check your compositor or portal logs.
 
