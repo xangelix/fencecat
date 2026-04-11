@@ -15,13 +15,12 @@ use regex::RegexSet;
 #[command(
     name = "fencecat",
     version,
-    about = "Recursively emit Markdown code fences labeled with relative file paths.
-Useful for sharing source trees in LLM chats or other issue trackers."
+    about = "Recursively emit Markdown code fences labeled with relative file paths.\nUseful for sharing source trees in LLM chats or other issue trackers."
 )]
 struct Cli {
-    /// Root directory to scan OR a single file to emit
-    #[arg(value_name = "PATH", default_value = ".")]
-    dir: PathBuf,
+    /// Root directories to scan OR files to emit
+    #[arg(value_name = "PATHS", default_value = ".", num_args = 1..)]
+    paths: Vec<PathBuf>,
 
     /// Copy the full output to the clipboard
     #[arg(short = 'c', long = "copy", action = ArgAction::SetTrue)]
@@ -63,11 +62,23 @@ struct Cli {
     /// Prepend a plain file listing (like `dir`) before the fences (no timestamps/metadata)
     #[arg(short = 'D', long = "dir-list", action = ArgAction::SetTrue)]
     dir_list: bool,
+
+    /// Make file paths relative to their specific input argument rather than the CWD
+    #[arg(long = "context-relative", action = ArgAction::SetTrue)]
+    context_relative: bool,
 }
 
 impl Cli {
     pub fn build_walkdir(&self) -> WalkBuilder {
-        let mut wb = WalkBuilder::new(&self.dir);
+        let mut paths_iter = self.paths.iter();
+        let first_path = paths_iter.next().expect("At least one path is required");
+        let mut wb = WalkBuilder::new(first_path);
+
+        // Add any remaining paths to the builder
+        for path in paths_iter {
+            wb.add(path);
+        }
+
         if self.no_ignore {
             wb.hidden(false)
                 .ignore(false)
@@ -208,13 +219,18 @@ fn make_fileinfo_if_included(
     })
 }
 
-fn collect_from_dir(
-    cli: &Cli,
-    ext_allow: Option<&HashSet<String>>,
-    ext_deny: Option<&HashSet<String>>,
-    re_allow: Option<&RegexSet>,
-    re_deny: Option<&RegexSet>,
-) -> Vec<FileInfo> {
+fn collect_any(cli: &Cli) -> Vec<FileInfo> {
+    let (ext_allow, ext_deny) = build_ext_filters(cli);
+    let (re_allow, re_deny) = compile_regex_sets(cli);
+
+    // Validate existence before walking
+    for path in &cli.paths {
+        if !path.exists() {
+            eprintln!("No such file or directory: {}", path.display());
+            std::process::exit(1);
+        }
+    }
+
     let walker = cli.build_walkdir().build();
     let mut files: Vec<FileInfo> = Vec::new();
 
@@ -226,11 +242,36 @@ fn collect_from_dir(
                 continue;
             }
         };
+
         if entry.file_type().is_some_and(|ft| ft.is_file()) {
             let path = entry.path();
-            if let Some(info) =
-                make_fileinfo_if_included(path, &cli.dir, ext_allow, ext_deny, re_allow, re_deny)
-            {
+
+            // Dynamically determine the root for this specific file
+            let root_for_rel = if cli.context_relative {
+                // Find which input argument this file belongs to
+                cli.paths.iter().find(|&p| path.starts_with(p)).map_or_else(
+                    || PathBuf::from("."),
+                    |p| {
+                        if p.is_file() {
+                            p.parent().unwrap_or_else(|| Path::new(".")).to_path_buf()
+                        } else {
+                            p.clone()
+                        }
+                    },
+                )
+            } else {
+                // Always relative to CWD unless --context-relative is passed
+                PathBuf::from(".")
+            };
+
+            if let Some(info) = make_fileinfo_if_included(
+                path,
+                &root_for_rel,
+                ext_allow.as_ref(),
+                ext_deny.as_ref(),
+                re_allow.as_ref(),
+                re_deny.as_ref(),
+            ) {
                 files.push(info);
             }
         }
@@ -246,51 +287,6 @@ fn collect_from_dir(
         files.sort_by(|a, b| a.rel.cmp(&b.rel));
     }
     files
-}
-
-fn collect_from_single(
-    cli: &Cli,
-    ext_allow: Option<&HashSet<String>>,
-    ext_deny: Option<&HashSet<String>>,
-    re_allow: Option<&RegexSet>,
-    re_deny: Option<&RegexSet>,
-) -> Vec<FileInfo> {
-    let path = &cli.dir;
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    make_fileinfo_if_included(path, parent, ext_allow, ext_deny, re_allow, re_deny)
-        .into_iter()
-        .collect()
-}
-
-fn collect_any(cli: &Cli) -> Vec<FileInfo> {
-    let (ext_allow, ext_deny) = build_ext_filters(cli);
-    let (re_allow, re_deny) = compile_regex_sets(cli);
-
-    if !cli.dir.exists() {
-        eprintln!("No such file or directory: {}", cli.dir.display());
-        std::process::exit(1);
-    }
-
-    if cli.dir.is_file() {
-        collect_from_single(
-            cli,
-            ext_allow.as_ref(),
-            ext_deny.as_ref(),
-            re_allow.as_ref(),
-            re_deny.as_ref(),
-        )
-    } else if cli.dir.is_dir() {
-        collect_from_dir(
-            cli,
-            ext_allow.as_ref(),
-            ext_deny.as_ref(),
-            re_allow.as_ref(),
-            re_deny.as_ref(),
-        )
-    } else {
-        eprintln!("Not a regular file or directory: {}", cli.dir.display());
-        std::process::exit(1);
-    }
 }
 
 fn emit_dir_listing(files: &[FileInfo]) -> String {
