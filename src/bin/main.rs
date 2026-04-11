@@ -114,6 +114,7 @@ struct FileInfo {
     path: PathBuf,
     rel: String,
     size: u64,
+    arg_index: usize,
 }
 
 /// Helper to normalize extension lists (strip dots, lowercase)
@@ -145,6 +146,7 @@ fn compile_regex_sets(cli: &Cli) -> (Option<RegexSet>, Option<RegexSet>) {
 fn make_fileinfo_if_included(
     path: &Path,
     root_for_rel: &Path,
+    arg_index: usize,
     ext_allow: Option<&HashSet<String>>,
     ext_deny: Option<&HashSet<String>>,
     re_allow: Option<&RegexSet>,
@@ -216,6 +218,7 @@ fn make_fileinfo_if_included(
         path: path.to_path_buf(),
         rel,
         size: md.len(),
+        arg_index,
     })
 }
 
@@ -246,12 +249,20 @@ fn collect_any(cli: &Cli) -> Vec<FileInfo> {
         if entry.file_type().is_some_and(|ft| ft.is_file()) {
             let path = entry.path();
 
-            // Dynamically determine the root for this specific file
+            // Find which input argument this file belongs to.
+            // WalkBuilder yields paths that begin with the exact argument string used to add them.
+            let matched_arg = cli
+                .paths
+                .iter()
+                .enumerate()
+                .find(|(_, p)| path.starts_with(p));
+
+            let arg_index = matched_arg.map_or(0, |(i, _)| i);
+
             let root_for_rel = if cli.context_relative {
-                // Find which input argument this file belongs to
-                cli.paths.iter().find(|&p| path.starts_with(p)).map_or_else(
+                matched_arg.map_or_else(
                     || PathBuf::from("."),
-                    |p| {
+                    |(_, p)| {
                         if p.is_file() {
                             p.parent().unwrap_or_else(|| Path::new(".")).to_path_buf()
                         } else {
@@ -260,13 +271,13 @@ fn collect_any(cli: &Cli) -> Vec<FileInfo> {
                     },
                 )
             } else {
-                // Always relative to CWD unless --context-relative is passed
                 PathBuf::from(".")
             };
 
             if let Some(info) = make_fileinfo_if_included(
                 path,
                 &root_for_rel,
+                arg_index,
                 ext_allow.as_ref(),
                 ext_deny.as_ref(),
                 re_allow.as_ref(),
@@ -278,13 +289,20 @@ fn collect_any(cli: &Cli) -> Vec<FileInfo> {
     }
 
     if cli.biggest_first {
+        // Global size sort. Tie-breakers: input argument order, then alphabetical
         files.sort_by(|a, b| {
             Reverse(a.size)
                 .cmp(&Reverse(b.size))
+                .then_with(|| a.arg_index.cmp(&b.arg_index))
                 .then_with(|| a.rel.cmp(&b.rel))
         });
     } else {
-        files.sort_by(|a, b| a.rel.cmp(&b.rel));
+        // Group by input argument order, then sort alphabetically within each group
+        files.sort_by(|a, b| {
+            a.arg_index
+                .cmp(&b.arg_index)
+                .then_with(|| a.rel.cmp(&b.rel))
+        });
     }
     files
 }
