@@ -1,5 +1,9 @@
 # fencecat ⚖️🐈
 
+[![Crates.io](https://img.shields.io/crates/v/fencecat)](https://crates.io/crates/fencecat)
+[![Docs.rs](https://docs.rs/fencecat/badge.svg)](https://docs.rs/fencecat)
+[![License](https://img.shields.io/crates/l/fencecat)](https://spdx.org/licenses/MIT)
+
 Recursively emit Markdown code fences labeled with relative file paths.  
 Perfect for sharing source trees in LLM chats, issues, blog posts, or code reviews.
 
