@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.0
+
+Support for multiple directory contexts and path positional arguments.
+
+- **Release:** v0.3.0
+- **Features (bin):** keep order between multiple contexts
+- **Features (bin):** support multiple path positional arguments
+- **Chore (meta/Cargo):** structured bin path and name
+- **Chore (meta/deps):** bump
+
 ## v0.2.2
 
 - **Release:** v0.2.2
