@@ -55,6 +55,10 @@ struct Cli {
     #[arg(long = "not-regex", action = ArgAction::Append)]
     not_regex: Option<Vec<String>>,
 
+    /// Include hidden files and directories (still respecting gitignore rules)
+    #[arg(short = '.', long = "hidden", action = ArgAction::SetTrue)]
+    hidden: bool,
+
     /// Include hidden and gitignored files (disable ignore rules)
     #[arg(short = 'H', long = "no-ignore")]
     no_ignore: bool,
@@ -86,6 +90,9 @@ impl Cli {
                 .git_global(false)
                 .git_exclude(false)
                 .parents(false);
+        } else if self.hidden {
+            // Allows hidden files while keeping all other ignore/gitignore filters active
+            wb.hidden(false);
         }
         wb
     }
