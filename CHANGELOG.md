@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.4.0
+
+Support for including hidden (but not ignored) files, and initial GitHub Actions CI/CD release workflow.
+
+- **Features (meta/rust-toolchain):** add for 1.96.0
+- **Features (bin):** add support for including hidden, but not ignored, files
+- **Features (cicd/github):** init ci and release builds
+- **Features (meta/FUNDING):** add gh funding for xangelix
+- **Features (meta/editorconfig):** init with LF and final newlines
+- **Chore (meta/deps):** bump
+- **Chore (docs/README):** prettier fmt
+- **Features (docs/README):** add badges
+
 ## v0.3.0
 
 Support for multiple directory contexts and path positional arguments.
